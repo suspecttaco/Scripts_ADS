@@ -78,6 +78,7 @@ verificar_instalar_dhcp() {
         
         if [ $? -eq 0 ]; then
             msg_success "Instalado correctamente"
+            sleep 5
             return 0
         else
             msg_error "Fallo en la instalacion"
@@ -434,6 +435,13 @@ menu() {
         read -p "Presione ENTER para continuar..."
     done
 }
+
+# Verificar que el script se ejecute como root (sudo)
+if [[ $EUID -ne 0 ]]; then
+   msg_error "Este script debe ejecutarse con privilegios de superusuario (root)."
+   msg_info "Por favor, intenta usar: sudo $0"
+   exit 1
+fi
 
 # Verificacion automatica
 verificar_instalar_dhcp
