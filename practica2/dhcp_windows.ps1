@@ -387,6 +387,29 @@ function Monitor-DHCPServer {
     
     Show-Separator
     Write-Host ""
+
+    # Logs recientes
+    Write-Host "Logs recientes" -ForegroundColor White
+    Write-Host ""
+    
+    try {
+        $logs = Get-WinEvent -LogName "Microsoft-Windows-Dhcp-Server/Operational" -MaxEvents 10 -ErrorAction Stop
+        
+        foreach ($log in $logs) {
+            $time = $log.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss")
+            $level = switch ($log.LevelDisplayName) {
+                "Information" { Write-Host "  [$time] " -NoNewline; Write-Host "INFO " -ForegroundColor Blue -NoNewline }
+                "Warning"     { Write-Host "  [$time] " -NoNewline; Write-Host "WARN " -ForegroundColor Yellow -NoNewline }
+                "Error"       { Write-Host "  [$time] " -NoNewline; Write-Host "ERROR" -ForegroundColor Red -NoNewline }
+                default       { Write-Host "  [$time] " -NoNewline; Write-Host "$($log.LevelDisplayName) " -NoNewline }
+            }
+            Write-Host ": $($log.Message.Split("`n")[0])"
+        }
+    } catch {
+        Write-Warning-Custom "No se pudieron obtener los logs: $_"
+    }
+    
+    Write-Host ""
 }
 
 # Menu principal
