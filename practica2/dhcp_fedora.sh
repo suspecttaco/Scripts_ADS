@@ -7,6 +7,44 @@
 # - Configura servicio
 # - Monitorea el servicio
 
+# Colores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m' # Sin color
+
+separator() {
+    echo -e "${CYAN}------------------------------------------------------------${NC}"
+}
+
+msg_success() {
+    echo -e "${NC}[ ${GREEN}EXITO ${NC}] $1"
+}
+
+msg_error() {
+    echo -e "${NC}[ ${RED}ERROR ${NC}] $1"
+}
+
+msg_info() {
+    echo -e "${NC}[ ${BLUE}INFO ${NC}]  $1"
+}
+
+msg_alert() {
+    echo -e "${NC}[ ${YELLOW}ALERT ${NC}] $1"
+}
+
+msg_process() {
+    echo -e "${NC}[  ${CYAN}---  ${NC}] $1"
+}
+
+msg_input() {
+    echo -ne "${CYAN}->${NC} $1"
+}
+
 # Validar formato de IP
 validar_ip() {
     local ip=$1
@@ -27,21 +65,22 @@ validar_ip() {
 
 # Verificar e instalar DHCP 
 verificar_instalar_dhcp() {
-    echo "[*] Verificando presencia de dhcp-server..."
+    separator
+    msg_process "Verificando presencia de dhcp-server..."
     
     # Verificar si el paquete ya esta instalado
     if rpm -q dhcp-server &> /dev/null; then
-        echo "[OK] dhcp-server ya instalado"
+        msg_success "dhcp-server ya instalado"
         return 0
     else
-        echo "[*] dhcp-server no encontrado. Instalando..."
+        msg_alert "dhcp-server no encontrado. Instalando..."
         sudo dnf install -y dhcp-server &> /dev/null
         
         if [ $? -eq 0 ]; then
-            echo "[OK] Instalado correctamente"
+            msg_success "Instalado correctamente"
             return 0
         else
-            echo "[ERROR] Fallo en la instalacion"
+            msg_error "Fallo en la instalacion"
             return 1
         fi
     fi
@@ -51,106 +90,159 @@ verificar_instalar_dhcp() {
 # Listar interfaces disponibles
 listar_interfaces() {
     echo ""
-    echo "Interfaces de red disponibles:"
-    ip -o link show | awk -F': ' '{print "  - " $2}' | grep -v "lo"
+    msg_input "Interfaces de red disponibles:"
+    echo ""
+    ip -o link show | awk -F': ' '{print $2}' | grep -v "lo" | while read interfaz; do
+        echo -e "   ${GREEN}<> ${WHITE}$interfaz${NC}"
+    done
     echo ""
 }
 
 # Configurar servidor DHCP
 configurar_dhcp() {
-    echo ""
-    echo " CONFIGURACION DE DHCP "
+    separator
+    echo -e "${WHITE}--- CONFIGURACION DE DHCP ---${NC}"
     echo ""
     
     # Solicitar nombre del scope
-    read -p "Nombre del ambito (scope): " SCOPE_NAME
+    msg_input "Nombre del ambito (scope): "
+    read SCOPE_NAME
     
     # Listar interfaces disponibles
     listar_interfaces
     
     # Solicitar interfaz de red
     while true; do
-        read -p "Interfaz de red a usar: " INTERFAZ
+        msg_input "Interfaz de red a usar: " 
+        read INTERFAZ
         if ip link show "$INTERFAZ" &> /dev/null; then
             break
         fi
-        echo "[ERROR] La interfaz '$INTERFAZ' no existe"
+        msg_error "La interfaz '$INTERFAZ' no existe"
     done
     
+    echo ""
+    separator
+    echo -e "${WHITE}Configuracion de Red${NC}"
+    echo ""
+
     # Solicitar ip base
     while true; do
-        read -p "IP base (ej. 192.168.1.0): " RED_BASE
+        msg_input "Segmento (ej. 192.168.1.0): " 
+        read RED_BASE
         if validar_ip "$RED_BASE"; then
             # Extraer los primeros 3 octetos para construir IPs
             RED_PREFIJO=$(echo $RED_BASE | cut -d. -f1-3)
             break
         fi
-        echo "[ERROR] IP invalida"
+        msg_error "IP invalida"
     done
     
     # Solicitar mascara de subred
     while true; do
-        read -p "Mascara de subred [255.255.255.0]: " MASCARA
+        msg_input "Mascara de subred [default = 255.255.255.0]: " 
+        read MASCARA
         MASCARA=${MASCARA:-255.255.255.0}
         if validar_ip "$MASCARA"; then
             break
         fi
-        echo "[ERROR] Mascara invalida"
+        msg_error "Mascara invalida"
     done
     
+    echo ""
+    separator
+    echo -e "${WHITE}Rango de IPs${NC}"
+    echo ""
+
     # IP de inicio con validacion
     while true; do
-        read -p "IP de inicio [${RED_PREFIJO}.50]: " IP_INICIO
+        msg_input "IP de inicio [default = ${RED_PREFIJO}.50]: " 
+        read IP_INICIO
         IP_INICIO=${IP_INICIO:-${RED_PREFIJO}.50}
         if validar_ip "$IP_INICIO"; then
             break
         fi
-        echo "[ERROR] IP invalida"
+        msg_error "IP invalida"
     done
     
     # IP final con validacion
     while true; do
-        read -p "IP final [${RED_PREFIJO}.150]: " IP_FIN
+        msg_input "IP final [default = ${RED_PREFIJO}.150]: " 
+        read IP_FIN
         IP_FIN=${IP_FIN:-${RED_PREFIJO}.150}
         if validar_ip "$IP_FIN"; then
             break
         fi
-        echo "[ERROR] IP invalida"
+        msg_error "IP invalida"
     done
+
+    echo ""
+    separator
+    echo -e "${WHITE}Parametros de Red${NC}"
+    echo ""
     
     # Gateway con validacion
     while true; do
-        read -p "Gateway [${RED_PREFIJO}.1]: " GATEWAY
+        msg_input "Gateway [default = ${RED_PREFIJO}.1]: " 
+        read GATEWAY
         GATEWAY=${GATEWAY:-${RED_PREFIJO}.1}
         if validar_ip "$GATEWAY"; then
             break
         fi
-        echo "[ERROR] IP invalida"
+        msg_error "IP invalida"
     done
     
     # DNS con validacion
     while true; do
-        read -p "Servidor DNS [${RED_PREFIJO}.10]: " DNS_SERVER
-        DNS_SERVER=${DNS_SERVER:-${RED_PREFIJO}.10}
+        msg_input "Servidor DNS [default = ${RED_PREFIJO}.20]: " 
+        read DNS_SERVER
+        DNS_SERVER=${DNS_SERVER:-${RED_PREFIJO}.20}
         if validar_ip "$DNS_SERVER"; then
             break
         fi
-        echo "[ERROR] IP invalida"
+        msg_error "IP invalida"
     done
     
     # Lease time con validacion
     while true; do
-        read -p "Tiempo de concesion en segundos [86400]: " LEASE_TIME
+        msg_input "Tiempo de concesion en segundos [default = 86400]: " 
+        read LEASE_TIME
         LEASE_TIME=${LEASE_TIME:-86400}
         
         if [[ "$LEASE_TIME" =~ ^[0-9]+$ ]]; then
             break
         fi
-        echo "[ERROR] Debe ser un numero entero"
+        msg_error "Debe ser un numero entero"
     done
+
+    echo ""
+    separator
+    echo -e "${WHITE}Resumen de configuracion${NC}"
+    echo ""
+    echo ""
+    echo -e "  ${CYAN}Scope:${NC}       $SCOPE_NAME"
+    echo -e "  ${CYAN}Interfaz:${NC}    $INTERFAZ"
+    echo -e "  ${CYAN}Red:${NC}         $RED_BASE/$MASCARA"
+    echo -e "  ${CYAN}Rango:${NC}       $IP_INICIO → $IP_FIN"
+    echo -e "  ${CYAN}Gateway:${NC}     $GATEWAY"
+    echo -e "  ${CYAN}DNS:${NC}         $DNS_SERVER"
+    echo -e "  ${CYAN}Lease:${NC}       $LEASE_TIME segundos"
+    echo ""
+    separator
+    echo ""
+
+    echo -ne "${YELLOW}Desea usar esta configuracion? (s/N): ${NC}"
+    read CONFIRMAR
+
+    if [[! "$CONFIRMAR" =~ ^[Ss]$ ]]; then
+        msg_alert "Configuracion cancelada por el usuario"
+        return 1
+    fi
     
     # Generar archivo de configuracion
-    echo "[*] Generando archivo de configuracion..."
+    echo ""
+    msg_process "Generando archivo de configuracion..."
+
     sudo tee /etc/dhcp/dhcpd.conf > /dev/null <<EOF
 # Configuracion DHCP - $SCOPE_NAME
 # Generado: $(date)
@@ -173,52 +265,55 @@ subnet $RED_BASE netmask $MASCARA {
 }
 EOF
     
+    msg_success "Archivo de configuracion creado"
+
     # Validar configuracion
-    echo "[*] Validando configuracion..."
+    msg_process "Validando configuracion..."
     sudo dhcpd -t -cf /etc/dhcp/dhcpd.conf
     
     if [ $? -ne 0 ]; then
-        echo "[ERROR] Error en la configuracion"
+        msg_error "Error en la configuracion"
         return 1
+    else
+        msg_success "Configuracion validada correctamente"    
     fi
     
     # Configurar interfaz de escucha
-    echo "[*] Configurando interfaz de red..."
+    msg_process "Configurando interfaz de red..."
     echo "DHCPDARGS=\"$INTERFAZ\"" | sudo tee /etc/sysconfig/dhcpd > /dev/null
+    msg_success "Interfaz de escucha configurada"
     
     # Configurar firewall
-    echo "[*] Configurando firewall..."
+    msg_process "Configurando firewall..."
     
     # Verificar que firewalld este activo
     if ! systemctl is-active --quiet firewalld; then
-        echo "[*] Iniciando firewalld..."
+        msg_process "Iniciando firewalld..."
         sudo systemctl start firewalld
     fi
     
     sudo firewall-cmd --permanent --zone=internal --add-service=dhcp &> /dev/null
     sudo firewall-cmd --reload &> /dev/null
+    msg_success "Reglas de firewall aplicadas"
     
     # Habilitar e iniciar servicio
-    echo "[*] Iniciando DHCP..."
+    msg_process "Iniciando DHCP..."
     sudo systemctl enable dhcpd &> /dev/null
     sudo systemctl restart dhcpd
     
     # Verificar estado
+    sleep 1
     if systemctl is-active --quiet dhcpd; then
-        echo "[OK] Servidor DHCP configurado y activo"
         echo ""
-        echo "Resumen de configuracion:"
-        echo "--Scope: $SCOPE_NAME"
-        echo "--Interfaz: $INTERFAZ"
-        echo "--Red: $RED_BASE/$MASCARA"
-        echo "--Rango: $IP_INICIO - $IP_FIN"
-        echo "--Gateway: $GATEWAY"
-        echo "--DNS: $DNS_SERVER"
-        echo "--Lease time: $LEASE_TIME segundos"
+        msg_success "Servidor DHCP configurado y activo"
+        echo ""
         return 0
     else
-        echo "[ERROR] El servicio no pudo iniciarse"
-        echo "Logs del servicio:"
+        echo ""
+        msg_error "El servicio no pudo iniciarse"
+        echo ""
+        msg_alert "Logs del servicio:"
+        echo ""
         sudo journalctl -u dhcpd -n 20 --no-pager
         return 1
     fi
@@ -226,79 +321,112 @@ EOF
 
 # Monitorear servidor DHCP
 monitorear_dhcp() {
+    separator
     echo ""
-    echo "ESTADO DE DHCP"
+    echo -e "${WHITE}--- ESTADO DE DHCP ---${NC}"
     echo ""
     
     # Estado del servicio
-    echo "Estado del servicio:"
+    echo ""
+    echo -e "${WHITE}Estado del servicio:${NC}"
+    echo ""
     if systemctl is-active --quiet dhcpd; then
-        echo "  Estado: ACTIVO"
+        echo -e "  Estado: ${GREEN}ACTIVO${NC}"
+        echo -e "  Uptime: $(systemctl show dhcpd --property=ActiveEnterTimestamp --value | awk '{print $2, $3}')"
     else
-        echo "  Estado: INACTIVO"
+        echo -e "  Estado: ${RED}INACTIVO${NC}"
     fi
     
     # Mostrar configuracion actual
     echo ""
-    echo "Configuracion actual:"
+    echo -e "${WHITE}Configuracion actual:${NC}"
+    
     if [ -f /etc/dhcp/dhcpd.conf ]; then
-        grep -E "^subnet|^[[:space:]]*range|^[[:space:]]*option" /etc/dhcp/dhcpd.conf | grep -v "^#"
+        grep -E "^subnet|^[[:space:]]*range|^[[:space:]]*option" /etc/dhcp/dhcpd.conf | grep -v "^#" | while read linea; do
+            echo -e "  ${CYAN}->${NC} $linea"
+        done
     fi
+
+    echo ""
     
     # Concesiones activas
-    # Concesiones activas (Versión filtrada)
     echo ""
-    echo "Concesiones activas:"
+    echo -e "${WHITE}Concesiones activas:${NC}"
+    echo ""
+
     if [ -f /var/lib/dhcpd/dhcpd.leases ]; then
-        sudo grep -E "lease|client-hostname|ends" /var/lib/dhcpd/dhcpd.leases | grep -v "^#"
+        local lease_count=$(grep "^lease" /var/lib/dhcpd/dhcpd.leases 2>/dev/null | wc -l)
+        echo -e "  ${CYAN}Total de concesiones:${NC} ${GREEN}$lease_count${NC}"
+        echo ""
+        
+        if [ $lease_count -gt 0 ]; then
+            sudo grep -E "lease|client-hostname|ends" /var/lib/dhcpd/dhcpd.leases | grep -v "^#" | sed 's/^/  /'
+        else
+            msg_info "No hay concesiones activas"
+        fi
     else
-        echo "  No hay archivo de concesiones"
+        msg_alert "No hay archivo de concesiones disponible"
     fi
     
-    # Logs recientes
     echo ""
-    echo "Logs recientes:"
-    sudo journalctl -u dhcpd -n 10 --no-pager
+
+    # Logs recientes
+    separator
+    echo ""
+    echo "Logs:"
+    echo ""
+    sudo journalctl -u dhcpd -n 10 --no-pager | tail -n +2 | sed 's/^/  /'
+    echo ""
+    separator
+    echo ""
 }
 
 # Menu principal
 menu() {
     while true; do
         clear
-        echo "Gestion de DHCP"
+        echo -e "${WHITE}═══ MENÚ PRINCIPAL ═══${NC}"
         echo ""
-        echo "1. Configurar servidor"
-        echo "2. Ver estado y concesiones"
-        echo "3. Reiniciar servicio"
-        echo "4. Salir"
+        echo -e "  ${GREEN}1.${NC} Configurar servidor DHCP"
+        echo -e "  ${GREEN}2.${NC} Ver estado y concesiones"
+        echo -e "  ${GREEN}3.${NC} Reiniciar servicio"
+        echo -e "  ${GREEN}4.${NC} Salir"
         echo ""
-        read -p "Seleccione una opcion: " opcion
+        separator
+        echo ""
+        msg_input "Seleccione una opcion: " 
+        read opcion
+
+        sleep 1
         
         case $opcion in
             1)
+                clear
                 # Verificar/instalar antes de configurar
                 if verificar_instalar_dhcp; then
                     configurar_dhcp
                 fi
                 ;;
             2)
+                clear
                 monitorear_dhcp
                 ;;
             3)
-                echo "[*] Reiniciando servicio DHCP..."
+                msg_process "Reiniciando servicio DHCP..."
                 sudo systemctl restart dhcpd
                 if [ $? -eq 0 ]; then
-                    echo "[OK] Servicio reiniciado"
+                    msg_success "Servicio reiniciado"
                 else
-                    echo "[ERROR] No se pudo reiniciar el servicio"
+                    msg_error "No se pudo reiniciar el servicio"
                 fi
                 ;;
             4)
-                echo "Saliendo..."
+                msg_info "Saliendo..."
+                sleep 3
                 exit 0
                 ;;
             *)
-                echo "[ERROR] Opcion invalida"
+                msg_error "Opcion invalida"
                 ;;
         esac
         
